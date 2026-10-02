@@ -1,4 +1,4 @@
-# 舞台灯光 Blender 预览包
+# 舞台灯光 Blender 模拟工具（北京大学新太阳B101九一剧场用）
 
 本目录提供一套已经生成好的 Blender 舞台场景，以及一个不依赖 MA2、Art-Net 或 Python 外部环境的基础灯光控台脚本。用户可以直接打开 `.blend` 文件，在 Blender Python Console 中选择灯具、设置 Dim 和 RGBW 颜色，并在 Rendered 视图中观察效果。
 
