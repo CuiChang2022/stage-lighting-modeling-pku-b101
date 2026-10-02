@@ -1,10 +1,13 @@
 import builtins
+import time
 
 import bpy
 
 
 ENERGY_SCALE = 100000.0
 DIM_GAMMA = 0.5
+SHUTTER_MAX_FREQUENCY_HZ = 20.0
+SHUTTER_TIMER_KEY = "_lighting_console_strobe"
 
 
 _selected_lights = []
@@ -34,6 +37,21 @@ def _redraw():
 def _remove_drivers(light):
     light.data.driver_remove("energy")
     light.data.driver_remove("color")
+
+
+def stop_shutter():
+    state = bpy.app.driver_namespace.pop(SHUTTER_TIMER_KEY, None)
+    if state is None:
+        return
+    timer = state.get("timer")
+    if timer is not None and bpy.app.timers.is_registered(timer):
+        bpy.app.timers.unregister(timer)
+    for light, energy in state["lights"]:
+        light["dmx_Shutter"] = 0.0
+        light["dmx_Shutter_Hz"] = 0.0
+        light.data.energy = energy
+    _redraw()
+    _announce("Shutter 已停止，灯具恢复常亮。")
 
 
 def fixture(first, last=None):
@@ -66,11 +84,13 @@ def _require_selection():
 
 def dim(value):
     """直接设置选中灯具的 Dim，绕过 Driver。"""
+    stop_shutter()
     value = max(0.0, min(100.0, float(value)))
     energy = ENERGY_SCALE * (value / 100.0) ** DIM_GAMMA
     for light in _require_selection():
         _remove_drivers(light)
         light["dmx_Dim"] = value
+        light["console_base_energy"] = energy
         light.data.energy = energy
     _redraw()
     _announce(f"Dim = {value:g}，Energy = {energy:g}。")
@@ -87,6 +107,50 @@ def rgbw(red, green, blue, white=0.0):
         light.data.color = color
     _redraw()
     _announce(f"RGBW = {values}，Blender color = {color}。")
+
+
+def shutter(value, frequency=None):
+    """设置当前选择的硬切频闪；Shutter=0 停止频闪。"""
+    value = max(0.0, min(100.0, float(value)))
+    if value <= 0.0:
+        stop_shutter()
+        for light in _require_selection():
+            light["dmx_Shutter"] = 0.0
+            light["dmx_Shutter_Hz"] = 0.0
+        return
+
+    lights = _require_selection()
+    stop_shutter()
+    if frequency is None:
+        frequency = SHUTTER_MAX_FREQUENCY_HZ * value / 100.0
+    frequency = max(0.01, float(frequency))
+    for light in lights:
+        light["dmx_Shutter"] = value
+        light["dmx_Shutter_Hz"] = frequency
+    state = {
+        "lights": [
+            (light, float(light.get("console_base_energy", light.data.energy)))
+            for light in lights
+        ],
+        "frequency": frequency,
+        "started": time.monotonic(),
+        "timer": None,
+    }
+
+    def update():
+        if bpy.app.driver_namespace.get(SHUTTER_TIMER_KEY) is not state:
+            return None
+        phase = (time.monotonic() - state["started"]) * state["frequency"]
+        is_open = phase % 1.0 < 0.5
+        for light, energy in state["lights"]:
+            light.data.energy = energy if is_open else 0.0
+        _redraw()
+        return 1.0 / 60.0
+
+    state["timer"] = update
+    bpy.app.driver_namespace[SHUTTER_TIMER_KEY] = state
+    bpy.app.timers.register(update, first_interval=0.0)
+    _announce(f"Shutter = {value:g}，频率 = {frequency:g} Hz。")
 
 
 def blackout():
@@ -122,6 +186,8 @@ def expose_console_commands():
         "thru": thru,
         "dim": dim,
         "rgbw": rgbw,
+        "shutter": shutter,
+        "stop_shutter": stop_shutter,
         "blackout": blackout,
         "out": out,
         "full": full,

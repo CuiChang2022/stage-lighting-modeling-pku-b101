@@ -78,12 +78,23 @@ rgbw(100, 0, 0)
 rgbw(red, green, blue, white)
 ```
 
+设置当前选择的硬切频闪。默认将 `Shutter` 的 `0-100` 换算为 `0-20 Hz`：
+
+```python
+fixture(1, 10)
+shutter(25)          # 约 5 Hz
+shutter(50, 8.0)     # 手动指定 8 Hz
+stop_shutter()       # 停止频闪并恢复常亮
+```
+
 当前可用命令：
 
 ```python
 blackout()   # 关闭当前选中的灯
 out()        # 选择并关闭全部 46 盏灯
 full()       # 将当前选中的灯设置为 Dim 100
+shutter(25)  # 以约 5 Hz 进行硬切频闪
+stop_shutter()  # 停止当前频闪
 status()     # 查看当前选择的 Dim、Energy 和颜色
 ```
 
@@ -102,3 +113,4 @@ status()     # 查看当前选择的 Dim、Energy 和颜色
 
 - 这个控台脚本是 Blender 内部预览工具，离 Grandma2 目前很远，很远......；
 - `Dim` 的功率曲线和 RGBW 颜色是用于预览的近似值，后续可使用现场照度、颜色和 Shutter 测量数据重新标定；
+- `shutter()` 使用 Blender 定时器进行实时预览，关闭 Blender 或重新运行脚本前，建议先执行 `stop_shutter()`；
